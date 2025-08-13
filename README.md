@@ -1,62 +1,61 @@
 # Isaac-Habitat-Path2RobotAction
+
 This is a tool for converting paths (formed by some points with locations, and start rotation) to a series of smooth and relatively continued actions.
-Trajectory Converter (Isaac/Habitat → Unified JSON)
+
+**Trajectory Converter (Isaac/Habitat → Unified JSON)**  
 将 Isaac / Habitat 的轨迹与指令统一为可下游处理的 JSON。自动生成 pure_pursuit 控制序列，支持分组、尾部策略与相机元数据注入。
 
-功能
-支持 输入/输出坐标系：--in-fmt isaac|habitat、--out-fmt isaac|habitat
+---
 
-scene_id / trajectory_id 原样保留（沿用源文件）
+## 功能
 
-orientation 键名按输出格式自动切换
+- 支持 输入/输出坐标系：`--in-fmt isaac|habitat`、`--out-fmt isaac|habitat`
+- `scene_id` / `trajectory_id` 原样保留（沿用源文件）
+- `orientation` 键名按输出格式自动切换
+  - 输出为 habitat → `{"x","y","z","w"}`
+  - 输出为 isaac → `{"w","x","y","z"}`
+- 自动运行 pure_pursuit，在每个 point 里写入逐步控制序列：[vx, vy, vyaw, dt]
+- straight / smooth 都保存完整控制序列
+- `action.type = "point"` 保存下一个 point 的首帧坐标（末段回退为本段最后一帧）
+- 在 points 末尾自动追加终点：`{"point_id": "END", "position": ...}`（仅存整条轨迹的最后一帧位置）
+- 同一条轨迹的所有指令都会各自写成一条 `samples[*]`
+- 可配置分组（`--group-size`）与尾部策略（`--tail keep|merge|drop|pad`）
+- 可选注入 camera_parameters（`--camera-json`）
+- `dataset_metadata` 记录：
+  - scene_source = 输入文件名、input_format、output_format、以及统计信息
 
-输出为 habitat → {"x","y","z","w"}
+---
 
-输出为 isaac → {"w","x","y","z"}
+## 快速开始
 
-自动运行 pure_pursuit，在每个 point 里写入逐步控制序列：[vx, vy, vyaw, dt]
+### 环境要求
 
-straight / smooth 都保存完整控制序列
-
-action.type = "point" 保存下一个 point 的首帧坐标（末段回退为本段最后一帧）
-
-在 points 末尾自动追加终点：{"point_id": "END", "position": ...}（仅存整条轨迹的最后一帧位置）
-
-同一条轨迹的 所有指令 都会各自写成一条 samples[*]
-
-可配置 分组（--group-size）与 尾部策略（--tail keep|merge|drop|pad）
-
-可选注入 camera_parameters（--camera-json）
-
-dataset_metadata 记录：
-scene_source = 输入文件名、input_format、output_format、以及统计信息
-
-快速开始
-环境要求
-Python 3.8+
+- Python 3.8+
 
 你的仓库需包含（或可安装）：
 
-utils/path_extract_isaac.py、utils/path_extract_habitat.py（都需提供 VLNCEPathLoader）
+- `utils/path_extract_isaac.py`、`utils/path_extract_habitat.py` （都需提供 `VLNCEPathLoader`）
+- `utils/pure_pursuit_dynamic_ld.py` （提供 `PurePursuitFollower2D`）
+- `utils/rotation_isaac2habitat.py` （提供 `Isaac2HabitatConverter`）
 
-utils/pure_pursuit_dynamic_ld.py（提供 PurePursuitFollower2D）
+---
 
-utils/rotation_isaac2habitat.py（提供 Isaac2HabitatConverter）
+### 安装
 
-安装
-bash
-复制
-编辑
+```bash
 git clone <your_repo_url>.git
 cd <your_repo>
 # 如果有依赖清单
 pip install -r requirements.txt
-运行
-Isaac → Habitat（常用）
+```
 
-bash
-复制
-编辑
+---
+
+### 运行
+
+#### Isaac → Habitat（常用）
+
+```bash
 python converter.py \
   --input input.json \
   --output out_hab.json \
@@ -64,47 +63,55 @@ python converter.py \
   --out-fmt habitat \
   --group-size 5 \
   --tail keep
-Habitat → Isaac
+```
 
-bash
-复制
-编辑
+#### Habitat → Isaac
+
+```bash
 python converter.py --input input.json --output out_isaac.json --in-fmt habitat --out-fmt isaac
-同系转换（坐标不变）
+```
 
-bash
-复制
-编辑
+#### 同系转换（坐标不变）
+
+```bash
 python converter.py --input input.json --output out.json --in-fmt isaac --out-fmt isaac
 # 或
 python converter.py --input input.json --output out.json --in-fmt habitat --out-fmt habitat
-注入相机参数
+```
 
-bash
-复制
-编辑
+#### 注入相机参数
+
+```bash
 python converter.py \
   --input input.json \
   --output out.json \
   --in-fmt isaac --out-fmt habitat \
   --camera-json examples/camera_details.json
-配置说明
-命令行参数
-参数	说明	必填	示例
---input	输入 JSON 文件路径	✅	input.json
---output	输出 JSON 文件路径	✅	out.json
---in-fmt	输入坐标系：isaac / habitat	否（默认 isaac）	isaac
---out-fmt	输出坐标系：isaac / habitat	否（默认 isaac）	habitat
---group-size	每个 point 打包的动作数（≥1）	否（默认交互询问=5）	5
---tail	尾部不足一组的处理策略：keep/merge/drop/pad	否（默认 keep）	merge
---camera-json	注入到 dataset_metadata.camera_parameters.camera_details 的数组	否	examples/camera_details.json
+```
 
-相机配置（可选）
-camera_details.json（数组）示例：
+---
 
-json
-复制
-编辑
+## 配置说明
+
+### 命令行参数
+
+| 参数           | 说明                               | 必填 | 示例                          |
+| -------------- | ---------------------------------- | ---- | ----------------------------- |
+| --input        | 输入 JSON 文件路径                  | ✅   | input.json                    |
+| --output       | 输出 JSON 文件路径                  | ✅   | out.json                      |
+| --in-fmt       | 输入坐标系：isaac / habitat         | 否（默认 isaac） | isaac            |
+| --out-fmt      | 输出坐标系：isaac / habitat         | 否（默认 isaac） | habitat          |
+| --group-size   | 每个 point 打包的动作数（≥1）       | 否（默认交互询问=5） | 5              |
+| --tail         | 尾部不足一组的处理策略：keep/merge/drop/pad | 否（默认 keep） | merge     |
+| --camera-json  | 注入到 dataset_metadata.camera_parameters.camera_details 的数组 | 否 | examples/camera_details.json |
+
+---
+
+### 相机配置（可选）
+
+`camera_details.json`（数组）示例：
+
+```json
 [
   {
     "camera_id": 0,
@@ -114,11 +121,15 @@ json
     "resolution": {"width": 1920, "height": 1080}
   }
 ]
-输入 / 输出示例
-输入最小示例
-json
-复制
-编辑
+```
+
+---
+
+## 输入 / 输出示例
+
+### 输入最小示例
+
+```json
 {
   "episodes": [
     {
@@ -129,10 +140,11 @@ json
     }
   ]
 }
-输出结构（节选）
-json
-复制
-编辑
+```
+
+### 输出结构（节选）
+
+```json
 {
   "dataset_metadata": {
     "name": "R2R",
@@ -184,30 +196,30 @@ json
     }
   ]
 }
-说明
+```
 
-orientation 键名随 输出格式 切换（habitat: xyzw，isaac: wxyz），仅做坐标系转换，不做欧拉角或角度缩放。
+---
 
-action.type="point" 为下一个 point 的首帧坐标（若无下一个，取本段最后一帧）。
+## 说明
 
-points 最末尾恒追加 point_id="END"，仅保存全轨迹最后一帧的位置。
+- orientation 键名随 输出格式 切换（habitat: xyzw，isaac: wxyz），仅做坐标系转换，不做欧拉角或角度缩放。
+- action.type="point" 为下一个 point 的首帧坐标（若无下一个，取本段最后一帧）。
+- points 最末尾恒追加 point_id="END"，仅保存全轨迹最后一帧的位置。
+- samples 含该轨迹的全部指令，一条指令对应一条 sample。
 
-samples 含该轨迹的全部指令，一条指令对应一条 sample。
+---
 
-示例文件
+## 示例文件
+
 建议提供：
 
-输入示例：examples/input_isaac.json、examples/input_habitat.json
-
-相机示例：examples/camera_details.json
-
-输出示例：examples/out_hab.json、examples/out_isaac.json
+- 输入示例：`examples/input_isaac.json`、`examples/input_habitat.json`
+- 相机示例：`examples/camera_details.json`
+- 输出示例：`examples/out_hab.json`、`examples/out_isaac.json`
 
 示例目录结构：
 
-pgsql
-复制
-编辑
+```
 .
 ├── converter.py
 ├── utils/
@@ -220,33 +232,33 @@ pgsql
     ├── input_habitat.json
     ├── camera_details.json
     └── out_hab.json
-常见问题（FAQ）
-Q1. 为什么 orientation 有两种键名？
+```
+
+---
+
+## 常见问题（FAQ）
+
+**Q1. 为什么 orientation 有两种键名？**  
 为兼容不同引擎的字段约定：输出 habitat 用 xyzw，输出 isaac 用 wxyz。数值仅做坐标系变换，不做欧拉角或倍角处理。
 
-Q2. 终点怎么表示？
-在 points 末尾追加 {"point_id": "END", "position": ...}，只存整条轨迹最后一帧的位置。
+**Q2. 终点怎么表示？**  
+在 points 末尾追加 `{"point_id": "END", "position": ...}`，只存整条轨迹最后一帧的位置。
 
-Q3. group-size 怎么选？
+**Q3. group-size 怎么选？**
 
-1：每帧一个 point（最细）
+- 1：每帧一个 point（最细）
+- N>1：每 N 帧聚成一个 point
+- 合并整条轨迹：把 group-size 设得足够大，并配合 `--tail merge/keep`。
 
-N>1：每 N 帧聚成一个 point
+**Q4. --tail 有何区别？**
 
-合并整条轨迹：把 group-size 设得足够大，并配合 --tail merge/keep。
+- keep：尾部不足 group-size 的帧单独成组
+- merge：并入上一组
+- drop：丢弃尾部
+- pad：用 `[0,0,0,0]` 补齐到 group-size
 
-Q4. --tail 有何区别？
-
-keep：尾部不足 group-size 的帧单独成组
-
-merge：并入上一组
-
-drop：丢弃尾部
-
-pad：用 [0,0,0,0] 补齐到 group-size
-
-Q5. Habitat→Isaac 会不会多加 +90°？
+**Q5. Habitat→Isaac 会不会多加 +90°？**  
 不会。该分支不额外旋转，按你的数据直接透传四元数（坐标系差异由上游或 loader 保证）。
 
-Q6. camera_images、memory_per_point 为什么是空？
+**Q6. camera_images、memory_per_point 为什么是空？**  
 预留字段，便于后续扩展（图像路径、回忆/检索内容等）；当前版本不主动生成。
